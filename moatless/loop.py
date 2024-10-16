@@ -275,6 +275,8 @@ class AgenticLoop:
 
     def _to_completion_messages(self) -> list[dict]:
         messages = [{"role": "system", "content": self.state.system_prompt()}]
+        if "o1" in self.state.model:
+            messages = [{"role": "user", "content": self.state.system_prompt()}]
 
         tool_call_id = None
         state_messages = self.state.messages()
