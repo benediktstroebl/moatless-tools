@@ -724,6 +724,7 @@ class CodeIndex:
 
         splitter = EpicSplitter(
             min_chunk_size=self._settings.min_chunk_size,
+            max_chunk_size=self._settings.hard_token_limit,
             chunk_size=self._settings.chunk_size,
             hard_token_limit=self._settings.hard_token_limit,
             max_chunks=self._settings.max_chunks,
@@ -731,8 +732,15 @@ class CodeIndex:
             index_callback=index_callback,
             repo_path=repo_path,
         )
-
+        
+        
         prepared_nodes = splitter.get_nodes_from_documents(docs, show_progress=True)
+        
+        for node in prepared_nodes:
+            if  count_tokens(node.get_content(), self._settings.embed_model) > self._settings.hard_token_limit:
+                logger.warning(f"Node with {count_tokens(node.get_content(), self._settings.embed_model)} tokens exceeds hard token limit of {self._settings.hard_token_limit}, truncating.")
+                node.text = node.text[:self._settings.hard_token_limit]
+            
         prepared_tokens = sum(
             [
                 count_tokens(node.get_content(), self._settings.embed_model)

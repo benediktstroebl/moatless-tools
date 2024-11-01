@@ -28,7 +28,7 @@ class IndexSettings(BaseModel):
     language: str = Field(default="python", description="The language of the code.")
     min_chunk_size: int = Field(default=100, description="The minimum chunk size.")
     chunk_size: int = Field(default=750, description="The soft max chunk size.")
-    hard_token_limit: int = Field(default=2000, description="The hard token limit.")
+    hard_token_limit: int = Field(default=6000, description="The hard token limit.")
     max_chunks: int = Field(
         default=200, description="The maximum number of chunks for one file."
     )

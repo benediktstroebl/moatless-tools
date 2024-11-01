@@ -7,7 +7,7 @@ from typing import Optional, Type, Any, List, Tuple, Callable
 
 import instructor
 import litellm
-from anthropic import Anthropic
+from anthropic import Anthropic, AnthropicBedrock
 from litellm import token_counter, completion_cost, cost_per_token
 from pydantic import BaseModel, Field
 
@@ -487,6 +487,7 @@ class AgenticLoop:
         self,
     ) -> Tuple[ActionRequest, Optional[float], Optional[int], Optional[int]]:
         messages = self._to_completion_messages()
+
         logger.info(f"{self.state} Create completion with {len(messages)} messages")
 
         if self._verify_state_func:
@@ -504,8 +505,60 @@ class AgenticLoop:
         tokens = token_counter(messages=messages[-1:])
         if self._max_message_tokens and tokens > self._max_message_tokens:
             raise ValueError(f"Too many tokens in the new message: {tokens}")
+        
 
-        if self.state.model.startswith("claude") and self.state.action_type():
+        for message in messages:
+            if message["role"] == "system":
+                message["role"] = "user"
+
+        print(self.state.model)
+        print(self.instructor_mode)
+        print(self.state.action_type())
+        if self.state.model.startswith("bedrock/us") and self.state.action_type():
+            try:
+                anthropic_client = instructor.from_anthropic(
+                    AnthropicBedrock(),
+                    mode=instructor.Mode.ANTHROPIC_TOOLS, # TOOLS is the default of the client
+                )
+
+                action_request, completion_response = (
+                    anthropic_client.chat.completions.create_with_completion(
+                        model=self.state.model,
+                        max_tokens=self.state.max_tokens,
+                        temperature=self.state.temperature,
+                        # stop=self.state.stop_words(),
+                        response_model=self.state.action_type(),
+                        messages=messages,
+                    )
+                )
+
+                logger.info(
+                    f"{self.state.name}: Input tokens: {completion_response.usage.input_tokens}, Output tokens: {completion_response.usage.output_tokens}"
+                )
+                (
+                    prompt_tokens_cost_usd_dollar,
+                    completion_tokens_cost_usd_dollar,
+                ) = cost_per_token(
+                    model=self.state.model,
+                    prompt_tokens=completion_response.usage.input_tokens,
+                    completion_tokens=completion_response.usage.output_tokens,
+                )
+                _final_cost = (
+                    prompt_tokens_cost_usd_dollar + completion_tokens_cost_usd_dollar
+                )
+            except Exception as e:
+                self._log_prompt(messages, error=traceback.format_exc())
+                raise e
+
+            self._log_prompt(messages, completion_response.content)
+            return (
+                action_request,
+                _final_cost,
+                completion_response.usage.input_tokens,
+                completion_response.usage.output_tokens,
+            )
+        
+        elif self.state.model.startswith("claude") and self.state.action_type():
             try:
                 anthropic_client = instructor.from_anthropic(
                     Anthropic(),
